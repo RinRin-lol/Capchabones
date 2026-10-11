@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>手のなか観察</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+:root{
+  color-scheme:dark;
+  --bg:#080c12;
+  --panel:rgba(13,19,28,.84);
+  --line:rgba(255,255,255,.14);
+  --text:#eaeff5;
+  --sub:#8f9db0;
+  --bone:#efe6cf;
+  --muscle:#e0563f;
+  --vessel:#5a8cff;
+}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg);color:var(--text);overflow:hidden;
+  font:500 15px/1.55 "Zen Kaku Gothic New","Hiragino Sans","Yu Gothic UI","Noto Sans JP",system-ui,sans-serif;
+  -webkit-tap-highlight-color:transparent;
+}
+#stage{position:fixed;inset:0;background:var(--bg)}
+#cv{display:block;width:100%;height:100%}
+#cam{position:absolute;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+
+.top{
+  position:fixed;left:0;right:0;top:0;z-index:2;
+  display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+  padding:calc(12px + env(safe-area-inset-top)) 16px 30px;
+  background:linear-gradient(rgba(8,12,18,.8),rgba(8,12,18,0));
+}
+.brand h1{margin:0;font-size:17px;font-weight:700;letter-spacing:.06em}
+.status{margin:2px 0 0;font-size:12px;color:var(--sub);display:flex;align-items:center}
+.led{width:8px;height:8px;border-radius:50%;background:#5b6677;margin-right:7px;flex:none}
+.led[data-s="live"]{background:#4be08a;box-shadow:0 0 8px #4be08a99}
+.led[data-s="search"]{background:#f0b84a}
+.led[data-s="load"]{background:#6ea8ff;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.35}}
+.tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.chip{
+  font:inherit;font-size:13px;color:var(--text);cursor:pointer;
+  padding:8px 13px;border-radius:999px;border:1px solid var(--line);background:var(--panel);
+}
+.chip:active{transform:scale(.97)}
+
+.hint{
+  position:fixed;left:16px;right:16px;top:40%;z-index:1;margin:0;
+  text-align:center;font-size:17px;color:#fff;text-shadow:0 1px 14px rgba(0,0,0,.8);
+  pointer-events:none;
+}
+
+.dock{
+  position:fixed;left:0;right:0;bottom:0;z-index:2;
+  display:flex;gap:10px;
+  padding:34px 16px calc(14px + env(safe-area-inset-bottom));
+  background:linear-gradient(rgba(8,12,18,0),rgba(8,12,18,.88) 55%);
+}
+.tog{
+  flex:1;min-width:0;min-height:62px;font:inherit;color:var(--text);cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  border-radius:14px;border:1px solid var(--line);background:var(--panel);
+  transition:background .15s,border-color .15s;
+}
+.tog .row{display:flex;align-items:center;gap:8px}
+.tog .dot{width:10px;height:10px;border-radius:50%;background:var(--c);opacity:.55}
+.tog b{font-size:16px;font-weight:700}
+.tog small{font-size:10px;letter-spacing:.16em;color:var(--sub)}
+.tog[aria-pressed="true"]{
+  border-color:var(--c);
+  background:rgba(255,255,255,.08);
+  background:color-mix(in srgb,var(--c) 20%,var(--panel));
+  box-shadow:inset 0 0 0 1px var(--c);
+}
+.tog[aria-pressed="true"] .dot{opacity:1;box-shadow:0 0 10px var(--c)}
+.tog[aria-pressed="true"] small{color:var(--text)}
+
+.intro{
+  position:fixed;inset:0;z-index:5;display:grid;place-items:center;overflow:auto;
+  padding:24px 16px;background:rgba(8,12,18,.84);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+}
+.card{width:100%;max-width:380px}
+.eyebrow{margin:0 0 6px;font-size:11px;letter-spacing:.22em;color:var(--sub)}
+.card h2{margin:0 0 12px;font-size:26px;line-height:1.3;font-weight:700;text-wrap:balance}
+.card p{margin:0 0 12px;color:#c3ccd8}
+.card ul{margin:0 0 20px;padding-left:1.2em;color:var(--sub);font-size:13px}
+.card li+li{margin-top:4px}
+.err{color:#ff9b8f!important;font-size:14px}
+.go{
+  display:block;width:100%;font:inherit;font-weight:700;font-size:16px;cursor:pointer;
+  padding:16px;border:0;border-radius:14px;background:var(--bone);color:#1b1710;
+}
+.go:active{transform:scale(.99)}
+.link{
+  display:block;width:100%;margin-top:6px;padding:12px;font:inherit;font-size:14px;
+  background:none;border:0;color:var(--sub);cursor:pointer;text-decoration:underline;text-underline-offset:3px;
+}
+button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.led[data-s="load"]{animation:none}}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <video id="cam" playsinline muted autoplay></video>
+</div>
+
+<header class="top">
+  <div class="brand">
+    <h1>手のなか観察</h1>
+    <p class="status"><i class="led" id="led" data-s="idle"></i><span id="statusText">待機中</span></p>
+  </div>
+  <div class="tools">
+    <button class="chip" id="btnFlip" type="button" hidden>カメラ切替</button>
+    <button class="chip" id="btnPhoto" type="button" hidden>写真で試す</button>
+  </div>
+</header>
+
+<p class="hint" id="hint" hidden></p>
+
+<nav class="dock" aria-label="表示するモデル">
+  <button class="tog" type="button" data-k="bone" style="--c:#efe6cf" aria-pressed="true">
+    <span class="row"><i class="dot"></i><b>骨</b></span><small>BONE</small>
+  </button>
+  <button class="tog" type="button" data-k="muscle" style="--c:#e0563f" aria-pressed="false">
+    <span class="row"><i class="dot"></i><b>筋肉</b></span><small>MUSCLE</small>
+  </button>
+  <button class="tog" type="button" data-k="vessel" style="--c:#5a8cff" aria-pressed="false">
+    <span class="row"><i class="dot"></i><b>血管</b></span><small>VESSEL</small>
+  </button>
+</nav>
+
+<section class="intro" id="intro">
+  <div class="card">
+    <p class="eyebrow">HAND ANATOMY SCOPE</p>
+    <h2>手のなかを見てみよう</h2>
+    <p>カメラに手を映すと、手の大きさと動きに合わせて、骨・筋肉・血管のモデルが重なって表示されます。肘のあたりまで推定して描きます。</p>
+    <ul>
+      <li>最初は骨だけが表示されます。下のボタンで切り替えと重ね表示ができます。</li>
+      <li>映像はこの端末の中だけで処理され、外部には送信されません。</li>
+    </ul>
+    <p class="err" id="err" hidden></p>
+    <button class="go" id="btnStart" type="button">カメラを起動</button>
+    <button class="link" id="btnIntroPhoto" type="button">カメラを使わず写真で試す</button>
+  </div>
+</section>
+
+<input type="file" id="file" accept="image/*" hidden>
+
+<!-- ============ 解剖モデルの描画（2D Canvas） ============ -->
+<script id="anatomy">
+window.Anatomy = (() => {
+  let c, S = 1;
+  const V = {
+    add: (a, b) => ({ x: a.x + b.x, y: a.y + b.y }),
+    sub: (a, b) => ({ x: a.x - b.x, y: a.y - b.y }),
+    mul: (a, k) => ({ x: a.x * k, y: a.y * k }),
+    len: a => Math.hypot(a.x, a.y),
+    norm: a => { const l = Math.hypot(a.x, a.y) || 1; return { x: a.x / l, y: a.y / l }; },
+    lerp: (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }),
+    dot: (a, b) => a.x * b.x + a.y * b.y,
+    perp: a => ({ x: -a.y, y: a.x })
+  };
+  const FINGERS = [[5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16], [17, 18, 19, 20]];
+  const KF = [1, 1.05, 0.95, 0.8];          // 指ごとの太さ係数
+  const BB = [-0.24, -0.08, 0.08, 0.24];    // 中手骨基部の横位置
+
+  // 手のひら基準の座標系を作る。
+  //  H(a,b): 手首から指方向へ a×手のひら長、人差し指→小指方向へ b×手のひら幅
+  //  A(s,b): 手首から肘方向へ s×前腕長、b×手首幅
+  function makeFrame(L) {
+    const w = L[0];
+    const Lp = V.len(V.sub(L[9], w));
+    if (!(Lp > 4)) return null;
+    const u = V.norm(V.sub(L[9], w));
+    const rawV = V.sub(L[17], L[5]);
+    const sign = V.dot(rawV, V.perp(u)) >= 0 ? 1 : -1;
+    const v = V.mul(V.perp(u), sign);
+    const Wp = Math.max(V.len(rawV), 0.5 * Lp);
+    const d = V.mul(u, -1);
+    const Ww = 0.74 * Wp, Fl = 2.5 * Lp;
+    return {
+      L, w, u, v, d, Lp, Wp, Ww, Fl,
+      H: (a, b) => ({ x: w.x + u.x * a * Lp + v.x * b * Wp, y: w.y + u.y * a * Lp + v.y * b * Wp }),
+      A: (s, b) => ({ x: w.x + d.x * s * Fl + v.x * b * Ww, y: w.y + d.y * s * Fl + v.y * b * Ww })
+    };
+  }
+
+  // 中心線 cf(t) と半幅 hw(t) から帯状の図形を作る
+  function ribbon(cf, hw, N) {
+    N = N || 14;
+    const left = [], right = [];
+    for (let i = 0; i <= N; i++) {
+      const t = i / N, p = cf(t);
+      const a = cf(Math.max(0, t - 0.03)), b = cf(Math.min(1, t + 0.03));
+      const n = V.perp(V.norm(V.sub(b, a))), h = hw(t);
+      left.push({ x: p.x + n.x * h, y: p.y + n.y * h });
+      right.push({ x: p.x - n.x * h, y: p.y - n.y * h });
+    }
+    c.beginPath();
+    c.moveTo(left[0].x, left[0].y);
+    for (let i = 1; i <= N; i++) c.lineTo(left[i].x, left[i].y);
+    for (let i = N; i >= 0; i--) c.lineTo(right[i].x, right[i].y);
+    c.closePath();
+  }
+
+  function curve(p) {
+    c.beginPath();
+    c.moveTo(p[0].x, p[0].y);
+    if (p.length === 2) { c.lineTo(p[1].x, p[1].y); return; }
+    for (let i = 1; i < p.length - 1; i++) {
+      const m = V.lerp(p[i], p[i + 1], 0.5);
+      c.quadraticCurveTo(p[i].x, p[i].y, m.x, m.y);
+    }
+    const e = p[p.length - 1];
+    c.lineTo(e.x, e.y);
+  }
+
+  /* ---------------- 骨 ---------------- */
+  function paintBone(fill) {
+    c.setLineDash([]);
+    c.lineWidth = Math.max(3, S * 0.05);
+    c.strokeStyle = 'rgba(255,236,170,0.16)'; c.stroke();
+    c.fillStyle = fill || '#efe6cf'; c.fill();
+    c.lineWidth = Math.max(1, S * 0.011);
+    c.strokeStyle = 'rgba(88,78,58,0.92)'; c.stroke();
+  }
+
+  // 両端がふくらんだ長骨。p0→p1、gapは関節のすき間
+  function bone(p0, p1, shaft, ea, eb, ga, gb, fill) {
+    ga = ga == null ? 0.04 : ga; gb = gb == null ? 0.04 : gb;
+    const a = V.lerp(p0, p1, ga), b = V.lerp(p0, p1, 1 - gb);
+    const hw = t => {
+      const x = Math.exp(-Math.pow(t / 0.22, 2)), y = Math.exp(-Math.pow((1 - t) / 0.22, 2));
+      const m = Math.min(t, 1 - t) + 0.02, cap = Math.sqrt(Math.min(1, m / 0.1));
+      return Math.max(0.6, (shaft + (ea - shaft) * x + (eb - shaft) * y) * cap);
+    };
+    ribbon(t => V.lerp(a, b, t), hw, 14);
+    paintBone(fill);
+    const h0 = V.lerp(a, b, 0.2), h1 = V.lerp(a, b, 0.8);
+    c.beginPath(); c.moveTo(h0.x, h0.y); c.lineTo(h1.x, h1.y);
+    c.strokeStyle = 'rgba(255,255,255,0.5)'; c.lineWidth = Math.max(1, shaft * 0.4); c.stroke();
+  }
+
+  function bones(F) {
+    const { L, H, A, u, Wp, Ww } = F;
+    // 橈骨（親指側）と尺骨（小指側）
+    bone(A(0.0, -0.22), A(0.97, -0.09), 0.085 * Ww, 0.26 * Ww, 0.19 * Ww, 0, 0);
+    bone(A(0.01, 0.28), A(1.0, 0.14), 0.085 * Ww, 0.15 * Ww, 0.27 * Ww, 0, 0);
+
+    // 手根骨 8個（近位列と遠位列）
+    const ang = Math.atan2(u.y, u.x);
+    const C = [
+      [0.07, -0.26, 0.07, 0.10], [0.05, -0.07, 0.06, 0.085], [0.07, 0.13, 0.06, 0.08], [0.13, 0.27, 0.045, 0.05],
+      [0.21, -0.36, 0.06, 0.085], [0.23, -0.17, 0.05, 0.07], [0.24, 0.02, 0.07, 0.09], [0.22, 0.22, 0.065, 0.085]
+    ];
+    for (const [a, b, au, bv] of C) {
+      const p = H(a, b);
+      c.beginPath(); c.ellipse(p.x, p.y, au * Wp, bv * Wp, ang, 0, Math.PI * 2);
+      paintBone('#e9dfc4');
+    }
+
+    // 中手骨
+    FINGERS.forEach((f, i) => {
+      const k = KF[i];
+      bone(H(0.31, BB[i]), L[f[0]], 0.048 * Wp * k, 0.075 * Wp * k, 0.08 * Wp * k, 0, 0.07);
+    });
+    bone(V.lerp(L[1], L[0], 0.12), L[2], 0.062 * Wp, 0.085 * Wp, 0.085 * Wp, 0, 0.06);
+
+    // 指骨（基節・中節・末節）
+    FINGERS.forEach((f, i) => {
+      const k = KF[i] * Wp;
+      bone(L[f[0]], L[f[1]], 0.042 * k, 0.06 * k, 0.055 * k, 0.05, 0.04);
+      bone(L[f[1]], L[f[2]], 0.036 * k, 0.05 * k, 0.047 * k, 0.05, 0.04);
+      bone(L[f[2]], L[f[3]], 0.03 * k, 0.047 * k, 0.052 * k, 0.05, 0.16);
+    });
+    // 親指（基節・末節）
+    bone(L[2], L[3], 0.055 * Wp, 0.075 * Wp, 0.07 * Wp, 0.06, 0.04);
+    bone(L[3], L[4], 0.045 * Wp, 0.065 * Wp, 0.06 * Wp, 0.05, 0.16);
+  }
+
+  /* ---------------- 筋肉 ---------------- */
+  function paintMuscle(fill) {
+    c.setLineDash([]);
+    c.fillStyle = fill || 'rgba(196,56,46,0.84)'; c.fill();
+    c.lineWidth = Math.max(1, S * 0.011);
+    c.strokeStyle = 'rgba(78,12,16,0.9)'; c.stroke();
+  }
+
+  function spindle(p0, p1, peak, fill) {
+    ribbon(t => V.lerp(p0, p1, t),
+      t => Math.max(0.6, peak * Math.pow(Math.sin(Math.PI * (0.06 + 0.88 * t)), 0.7)), 12);
+    paintMuscle(fill);
+  }
+
+  function muscles(F) {
+    const { L, H, A, w, v, Wp, Ww } = F;
+    const hwf = s => Ww * (0.5 + 0.22 * Math.sin(Math.min(1, s / 0.85) * Math.PI / 2));
+
+    // 前腕の筋肉の土台
+    const N = 10;
+    c.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const s = 0.3 + 0.7 * i / N, p = A(s, -hwf(s) / Ww);
+      i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+    }
+    for (let i = N; i >= 0; i--) {
+      const s = 0.3 + 0.7 * i / N, p = A(s, hwf(s) / Ww);
+      c.lineTo(p.x, p.y);
+    }
+    c.closePath();
+    c.fillStyle = 'rgba(112,26,28,0.6)'; c.fill();
+
+    // 手のひらの筋肉の土台
+    const pm = [H(0, -0.30), V.lerp(L[1], L[0], 0.05), L[1], V.lerp(L[2], L[1], 0.2), V.lerp(L[2], L[5], 0.5),
+      V.lerp(L[5], w, 0.07), V.lerp(L[9], w, 0.07), V.lerp(L[13], w, 0.07), V.lerp(L[17], w, 0.07), H(0, 0.28)];
+    c.beginPath();
+    pm.forEach((p, i) => i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y));
+    c.closePath();
+    c.fillStyle = 'rgba(112,26,28,0.6)'; c.fill();
+
+    // 前腕の筋腹（紡錘形）と筋線維
+    const lanes = [-0.8, -0.48, -0.16, 0.16, 0.48, 0.8];
+    lanes.forEach((ln, i) => {
+      const s0 = 0.97, s1 = 0.36 + (i % 2) * 0.06;
+      const cf = t => { const s = s0 + (s1 - s0) * t; return A(s, ln * hwf(s) / Ww * 0.92); };
+      const hw = t => {
+        const s = s0 + (s1 - s0) * t;
+        return Math.max(0.6, hwf(s) * 0.21 * Math.pow(Math.sin(Math.PI * Math.min(1, 0.08 + 0.92 * t)), 0.7));
+      };
+      ribbon(cf, hw, 16);
+      paintMuscle(i % 2 ? 'rgba(206,64,52,0.86)' : 'rgba(184,50,42,0.86)');
+      for (const kk of [-0.45, 0.45]) {
+        c.beginPath();
+        for (let j = 1; j <= 14; j++) {
+          const t = j / 15, p = cf(t);
+          const n = V.perp(V.norm(V.sub(cf(Math.min(1, t + 0.03)), cf(Math.max(0, t - 0.03)))));
+          const q = { x: p.x + n.x * hw(t) * kk, y: p.y + n.y * hw(t) * kk };
+          j === 1 ? c.moveTo(q.x, q.y) : c.lineTo(q.x, q.y);
+        }
+        c.strokeStyle = 'rgba(255,176,156,0.38)'; c.lineWidth = 1; c.stroke();
+      }
+    });
+
+    // 手の筋肉：母指球・小指球・母指内転筋・骨間筋
+    spindle(H(0.04, -0.38), V.lerp(L[2], L[1], 0.15), 0.17 * Wp);
+    spindle(V.lerp(L[1], L[0], 0.2), V.lerp(L[2], L[1], 0.4), 0.11 * Wp);
+    spindle(H(0.25, -0.05), V.lerp(L[2], L[5], 0.45), 0.09 * Wp);
+    spindle(H(0.06, 0.28), V.lerp(L[17], w, 0.08), 0.12 * Wp);
+    for (let i = 0; i < 3; i++) {
+      const pA = V.lerp(H(0.31, BB[i]), H(0.31, BB[i + 1]), 0.5);
+      const pB = V.lerp(L[5 + 4 * i], L[9 + 4 * i], 0.5);
+      spindle(pA, pB, 0.05 * Wp, 'rgba(170,44,38,0.9)');
+    }
+
+    // 腱：前腕の筋腹から手首を通り、指先まで
+    const tendons = [];
+    const bw = [-0.30, -0.10, 0.10, 0.30];
+    FINGERS.forEach((f, i) => {
+      tendons.push([A(0.37, bw[i] * 1.9), A(0.16, bw[i] * 1.15), A(0.0, bw[i]), H(0.28, BB[i]),
+        L[f[0]], L[f[1]], L[f[2]], V.lerp(L[f[2]], L[f[3]], 0.75)]);
+    });
+    tendons.push([A(0.37, -0.9), A(0.16, -0.55), A(0.0, -0.45), L[1], L[2], L[3], V.lerp(L[3], L[4], 0.75)]);
+    c.lineCap = 'round'; c.lineJoin = 'round'; c.setLineDash([]);
+    for (const t of tendons) {
+      curve(t);
+      c.strokeStyle = 'rgba(70,16,18,0.5)'; c.lineWidth = Math.max(2, S * 0.03) + 1.5; c.stroke();
+      c.strokeStyle = 'rgba(255,230,220,0.92)'; c.lineWidth = Math.max(1.4, S * 0.024); c.stroke();
+    }
+  }
+
+  /* ---------------- 血管 ---------------- */
+  function vessel(p, w, kind, t) {
+    const art = kind === 'a';
+    const col = art ? '#ff5646' : '#4f86ff', hi = art ? '#ffd6cc' : '#c4d8ff';
+    curve(p);
+    c.setLineDash([]);
+    c.strokeStyle = 'rgba(8,10,16,0.5)'; c.lineWidth = w + 2; c.stroke();
+    c.strokeStyle = col; c.lineWidth = w; c.stroke();
+    if (t) {
+      c.setLineDash([S * 0.09, S * 0.55]);
+      c.lineDashOffset = -t * S * 0.0005;
+      c.strokeStyle = hi; c.lineWidth = Math.max(1, w * 0.5); c.stroke();
+      c.setLineDash([]); c.lineDashOffset = 0;
+    }
+  }
+
+  function vessels(F, t) {
+    const { L, H, A, u, v, Lp, Wp } = F;
+    const wA = Math.max(2, 0.045 * Wp), wA2 = Math.max(1.6, 0.03 * Wp), wA3 = Math.max(1.2, 0.016 * Wp);
+    const wV = Math.max(2.6, 0.06 * Wp), wV2 = Math.max(2, 0.04 * Wp), wV3 = Math.max(1.4, 0.022 * Wp);
+    const archV = b => H(0.38 + 0.10 * (1 - Math.pow(b / 0.45, 2)), b);
+    const archA = b => H(0.50 + 0.12 * (1 - Math.pow(b / 0.45, 2)), b);
+    const bf = [-0.28, -0.1, 0.08, 0.26];
+    const webs = [
+      V.lerp(L[5], L[2], 0.5),
+      V.add(V.lerp(L[5], L[9], 0.5), V.mul(u, 0.10 * Lp)),
+      V.add(V.lerp(L[9], L[13], 0.5), V.mul(u, 0.10 * Lp)),
+      V.add(V.lerp(L[13], L[17], 0.5), V.mul(u, 0.10 * Lp)),
+      V.add(V.add(L[17], V.mul(v, 0.12 * Wp)), V.mul(u, 0.10 * Lp))
+    ];
+
+    /* 静脈（青）：指先 → 心臓の向きに流れる */
+    const arc = [];
+    for (let b = -0.42; b <= 0.421; b += 0.14) arc.push(archV(b));
+    vessel(arc, wV2, 'v', 0);                                   // 手背静脈網
+    FINGERS.forEach((f, i) => {
+      vessel([V.lerp(L[f[2]], L[f[3]], 0.55), L[f[2]], L[f[1]], L[f[0]]], wV3, 'v', t);
+      const q = archV(bf[i]);
+      vessel([L[f[0]], V.lerp(L[f[0]], q, 0.5), q], wV3 * 1.3, 'v', t);
+    });
+    vessel([V.lerp(L[3], L[4], 0.6), L[3], L[2]], wV3, 'v', t);
+    vessel([L[2], archV(-0.42)], wV2, 'v', t);
+    vessel([archV(-0.42), H(0.22, -0.38), H(0.1, -0.34), A(0.02, -0.40)], wV2, 'v', t);               // 橈側皮静脈
+    vessel([A(0.02, -0.40), A(0.15, -0.40), A(0.4, -0.42), A(0.7, -0.42), A(1.0, -0.38)], wV, 'v', t);
+    vessel([archV(0.42), H(0.22, 0.38), H(0.1, 0.34), A(0.02, 0.36)], wV2, 'v', t);                    // 尺側皮静脈
+    vessel([A(0.02, 0.36), A(0.3, 0.38), A(0.65, 0.38), A(1.0, 0.32)], wV, 'v', t);
+    vessel([archV(0), H(0.18, 0), A(0.05, 0)], wV2, 'v', t);                                           // 前腕正中皮静脈
+    vessel([A(0.05, 0), A(0.3, -0.02), A(0.6, 0.03), A(0.95, 0)], wV * 0.85, 'v', t);
+
+    /* 動脈（赤）：心臓 → 指先の向きに流れる */
+    vessel([A(1, -0.26), A(0.65, -0.27), A(0.3, -0.27), A(0.04, -0.25)], wA, 'a', t);                  // 橈骨動脈
+    vessel([A(0.04, -0.25), H(0.1, -0.22), H(0.28, -0.26), archA(-0.36)], wA2, 'a', t);
+    vessel([A(1, 0.22), A(0.65, 0.26), A(0.3, 0.28), A(0.04, 0.28)], wA, 'a', t);                      // 尺骨動脈
+    vessel([A(0.04, 0.28), H(0.1, 0.24), H(0.3, 0.30), archA(0.30)], wA2, 'a', t);
+    const pa = [];
+    for (let b = 0.30; b >= -0.361; b -= 0.11) pa.push(archA(b));
+    vessel(pa, wA2, 'a', t);                                                                           // 浅掌動脈弓
+    [-0.16, 0.04, 0.22].forEach((b, i) => {
+      const q = archA(b);
+      vessel([q, V.lerp(q, webs[i + 1], 0.5), webs[i + 1]], wA3 * 1.2, 'a', t);
+    });
+    vessel([archA(-0.36), webs[0]], wA3 * 1.2, 'a', t);
+    vessel([archA(0.30), webs[4]], wA3 * 1.2, 'a', t);
+    FINGERS.forEach((f, i) => {
+      for (const s of [-1, 1]) {
+        const o = V.mul(v, s * 0.065 * Wp * KF[i]);
+        vessel([webs[i + (s === 1 ? 1 : 0)], V.add(V.lerp(L[f[0]], L[f[1]], 0.1), o), V.add(L[f[1]], o),
+          V.add(L[f[2]], o), V.add(V.lerp(L[f[2]], L[f[3]], 0.8), o)], wA3, 'a', t);
+      }
+    });
+    const tn = V.perp(V.norm(V.sub(L[4], L[2])));
+    for (const s of [-1, 1]) {
+      const o = V.mul(tn, s * 0.07 * Wp);
+      vessel([archA(-0.36), V.add(V.lerp(L[1], L[2], 0.5), o), V.add(L[2], o), V.add(L[3], o),
+        V.add(V.lerp(L[3], L[4], 0.8), o)], wA3, 'a', t);
+    }
+  }
+
+  /* L: 画面座標の21点、o: {bone,muscle,vessel}、t: 時刻(ms。0で脈動を止める)、alpha: 不透明度 */
+  function drawHand(ctx, L, o, t, alpha) {
+    const F = makeFrame(L);
+    if (!F) return;
+    c = ctx; S = F.Wp;
+    c.save();
+    c.globalAlpha = alpha == null ? 1 : alpha;
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    if (o.muscle) muscles(F);
+    if (o.bone) bones(F);
+    if (o.vessel) vessels(F, t);
+    c.restore();
+  }
+
+  return { drawHand };
+})();
+</script>
+
+<!-- ============ アプリ本体 ============ -->
+<script type="module">
+import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const MODEL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d'), cam = $('cam');
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const state = { bone: true, muscle: false, vessel: false };   // 最初は骨だけ
+let landmarker = null, lmMode = 'VIDEO', modelPromise = null;
+let facing = 'user', stream = null, multiCam = false;
+let source = { kind: 'none' };
+let busy = false, started = false;
+const hands = new Map();
+let lastVT = -1, lastLive = 0, lastUI = '';
+
+/* ---------- モデル ---------- */
+function ensureModel() {
+  if (!modelPromise) {
+    modelPromise = (async () => {
+      const fileset = await FilesetResolver.forVisionTasks(WASM);
+      const opts = delegate => ({
+        baseOptions: { modelAssetPath: MODEL, delegate },
+        runningMode: 'VIDEO', numHands: 2,
+        minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5, minTrackingConfidence: 0.5
+      });
+      try { landmarker = await HandLandmarker.createFromOptions(fileset, opts('GPU')); }
+      catch (e) { landmarker = await HandLandmarker.createFromOptions(fileset, opts('CPU')); }
+      lmMode = 'VIDEO';
+    })();
+    modelPromise.catch(() => { modelPromise = null; });
+  }
+  return modelPromise;
+}
+async function setMode(m) {
+  if (!landmarker || lmMode === m) return;
+  lmMode = 'BUSY';
+  await landmarker.setOptions({ runningMode: m });
+  lmMode = m;
+}
+
+/* ---------- カメラ ---------- */
+function closeCamera() {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null; cam.srcObject = null;
+}
+async function openCamera() {
+  closeCamera();
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    const e = new Error('insecure'); e.name = 'InsecureError'; throw e;
+  }
+  stream = await navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } }
+  });
+  const fm = stream.getVideoTracks()[0].getSettings().facingMode;
+  if (fm) facing = fm === 'environment' ? 'environment' : 'user';
+  cam.srcObject = stream;
+  await cam.play();
+  hands.clear(); lastVT = -1;
+  source = { kind: 'video' };
+  try {
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    multiCam = devs.filter(d => d.kind === 'videoinput').length > 1;
+  } catch (e) { multiCam = false; }
+}
+
+/* ---------- 写真 ---------- */
+async function loadPhoto(file) {
+  if (!file) return;
+  try {
+    busy = true; $('intro').hidden = true; started = true;
+    closeCamera(); source = { kind: 'none' }; hands.clear();
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    await img.decode();
+    await ensureModel();
+    await setMode('IMAGE');
+    const res = landmarker.detect(img);
+    ingest(res, performance.now(), img.naturalWidth, img.naturalHeight, true);
+    source = { kind: 'image', img, w: img.naturalWidth, h: img.naturalHeight };
+    busy = false;
+  } catch (e) { fail(e); }
+}
+
+/* ---------- 起動・エラー ---------- */
+async function begin() {
+  $('intro').hidden = true; $('err').hidden = true;
+  busy = true; started = true;
+  try {
+    await Promise.all([openCamera(), ensureModel()]);
+    await setMode('VIDEO');
+    busy = false;
+  } catch (e) { fail(e); }
+}
+function fail(e) {
+  console.warn(e);
+  busy = false; started = false; source = { kind: 'none' }; closeCamera();
+  const n = e && e.name;
+  let m;
+  if (n === 'NotAllowedError' || n === 'SecurityError') m = 'カメラの使用が許可されていません。ブラウザの設定で許可してから、もう一度お試しください。';
+  else if (n === 'NotFoundError' || n === 'OverconstrainedError') m = 'カメラが見つかりませんでした。';
+  else if (n === 'NotReadableError') m = 'カメラを開けませんでした。ほかのアプリが使用中かもしれません。';
+  else if (n === 'InsecureError') m = 'カメラが使えるのは、HTTPS（または localhost）で開いたページだけです。';
+  else m = 'モデルの読み込みに失敗しました。ネット接続を確認してください。';
+  $('err').textContent = m; $('err').hidden = false;
+  $('intro').hidden = false;
+}
+
+/* ---------- 手の検出結果の取り込み（ゆれを平滑化） ---------- */
+function ingest(res, now, sw, sh, still) {
+  const used = new Set();
+  (res.landmarks || []).forEach((lm, i) => {
+    let key = (res.handedness && res.handedness[i] && res.handedness[i][0] && res.handedness[i][0].categoryName) || ('h' + i);
+    if (used.has(key)) key += i;
+    used.add(key);
+    const raw = lm.map(p => ({ x: p.x, y: p.y }));
+    let h = hands.get(key);
+    if (!h || still) { hands.set(key, { pts: raw, born: now, seen: now, still }); return; }
+    const palm = Math.hypot((raw[9].x - raw[0].x) * sw, (raw[9].y - raw[0].y) * sh) || 1;
+    for (let j = 0; j < 21; j++) {
+      const dx = (raw[j].x - h.pts[j].x) * sw, dy = (raw[j].y - h.pts[j].y) * sh;
+      const a = Math.min(0.92, 0.38 + Math.hypot(dx, dy) / palm * 3);
+      h.pts[j] = { x: h.pts[j].x + (raw[j].x - h.pts[j].x) * a, y: h.pts[j].y + (raw[j].y - h.pts[j].y) * a };
+    }
+    h.seen = now;
+  });
+}
+
+/* ---------- 描画ループ ---------- */
+function fit() {
+  const r = cv.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  return { W: r.width, H: r.height, dpr };
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  const { W, H, dpr } = fit();
+  const mirror = source.kind === 'video' && facing === 'user';
+  ctx.setTransform(mirror ? -dpr : dpr, 0, 0, dpr, mirror ? W * dpr : 0, 0);
+  ctx.fillStyle = '#080c12'; ctx.fillRect(0, 0, W, H);
+
+  let el = null, sw = 0, sh = 0;
+  if (source.kind === 'video' && cam.readyState >= 2 && cam.videoWidth) {
+    el = cam; sw = cam.videoWidth; sh = cam.videoHeight;
+    if (landmarker && lmMode === 'VIDEO' && cam.currentTime !== lastVT) {
+      lastVT = cam.currentTime;
+      try { ingest(landmarker.detectForVideo(cam, now), now, sw, sh, false); } catch (e) { console.warn(e); }
+    }
+  } else if (source.kind === 'image') {
+    el = source.img; sw = source.w; sh = source.h;
+  }
+  if (!el) { updateUI(now, 0); return; }
+
+  const k = Math.max(W / sw, H / sh), dx = (W - sw * k) / 2, dy = (H - sh * k) / 2;
+  ctx.drawImage(el, dx, dy, sw * k, sh * k);
+  ctx.fillStyle = 'rgba(7,10,16,0.32)'; ctx.fillRect(0, 0, W, H);
+
+  let live = 0;
+  for (const [key, h] of hands) {
+    const age = now - h.seen;
+    let a = h.still || age < 160 ? 1 : Math.max(0, 1 - (age - 160) / 300);
+    if (a <= 0) { hands.delete(key); continue; }
+    if (h.still || age < 160) live++;
+    a *= Math.min(1, (now - h.born) / 220);
+    const L = h.pts.map(p => ({ x: p.x * sw * k + dx, y: p.y * sh * k + dy }));
+    Anatomy.drawHand(ctx, L, state, reduceMotion ? 0 : now, a);
+  }
+  updateUI(now, live);
+}
+
+/* ---------- 画面表示の更新 ---------- */
+function updateUI(now, live) {
+  if (live > 0) lastLive = now;
+  let s, text, hint = '';
+  if (busy) { s = 'load'; text = 'モデルを読み込み中…'; }
+  else if (source.kind === 'none') { s = 'idle'; text = '待機中'; }
+  else if (live > 0) {
+    s = 'live'; text = '手を検出中' + (live > 1 ? '（' + live + '）' : '');
+    if (!state.bone && !state.muscle && !state.vessel) hint = '下のボタンで表示するモデルを選んでください';
+  } else {
+    s = 'search'; text = '手を探しています';
+    if (source.kind === 'image') hint = '手が見つかりませんでした。別の写真をお試しください';
+    else if (now - lastLive > 700) hint = '手をカメラに映してください';
+  }
+  const flipText = source.kind === 'image' ? 'カメラに戻る' : 'カメラ切替';
+  const showFlip = source.kind === 'image' || (source.kind === 'video' && multiCam);
+  const sig = [s, text, hint, flipText, showFlip, started].join('|');
+  if (sig === lastUI) return;
+  lastUI = sig;
+  $('led').dataset.s = s;
+  $('statusText').textContent = text;
+  const hn = $('hint'); hn.textContent = hint; hn.hidden = !hint;
+  $('btnFlip').textContent = flipText; $('btnFlip').hidden = !showFlip;
+  $('btnPhoto').hidden = !started;
+}
+
+/* ---------- 操作 ---------- */
+document.querySelectorAll('.tog').forEach(b => b.addEventListener('click', () => {
+  const k = b.dataset.k;
+  state[k] = !state[k];
+  b.setAttribute('aria-pressed', String(state[k]));
+  lastUI = '';
+}));
+$('btnStart').addEventListener('click', begin);
+$('btnIntroPhoto').addEventListener('click', () => $('file').click());
+$('btnPhoto').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; loadPhoto(f); });
+$('btnFlip').addEventListener('click', async () => {
+  if (source.kind === 'video') facing = facing === 'user' ? 'environment' : 'user';
+  try {
+    busy = true;
+    await openCamera();
+    await setMode('VIDEO');
+    busy = false;
+  } catch (e) { fail(e); }
+});
+
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
